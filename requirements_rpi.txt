@@ -1,0 +1,9 @@
+# Pastikan menggunakan RPi OS 64-bit untuk TensorFlow yang optimal
+tensorflow>=2.10.0
+streamlit>=1.25.0
+paho-mqtt>=1.6.1
+pandas>=2.0.0
+numpy>=1.24.0
+joblib>=1.2.0
+plotly>=5.15.0
+watchdog>=3.0.0
