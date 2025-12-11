@@ -1,0 +1,29 @@
+# --- Project Specific ---
+# Abaikan folder artifacts di mana pun ia berada (di laptop atau rpi)
+artifacts/
+deployment_rpi/artifacts/
+
+# Abaikan Database SQLite (Data lokal tidak perlu naik ke Git)
+*.db
+*.sqlite3
+deployment_rpi/weather_data.db
+
+# --- Python Standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# --- Environments ---
+# Folder virtual environment
+venv/
+env/
+.env
+
+# --- MacOS Specific ---
+# File sampah yang sering muncul di Mac
+.DS_Store
+
+# --- IDE Specific ---
+# Jika kamu pakai VS Code
+.vscode/
