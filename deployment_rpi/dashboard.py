@@ -7,158 +7,137 @@ import numpy as np
 import joblib
 import streamlit as st
 import tensorflow as tf
+import plotly.graph_objects as go # Kita pakai Plotly agar grafik lebih interaktif
 
-# --- SETUP PATH MODULE ---
-# Agar RPi bisa membaca folder 'common' yang ada di level atasnya
+# --- SETUP PATH ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-# Import Library Sendiri
 from common.model_lib import Time2Vector 
 
-# --- KONFIGURASI ---
+# --- CONFIG ---
 DB_PATH = os.path.join(current_dir, "weather_data.db")
 MODEL_PATH = os.path.join(current_dir, "artifacts/weather_model.keras")
 SCALER_PATH = os.path.join(current_dir, "artifacts/scaler.pkl")
-SEQ_LENGTH = 24 # Wajib sama dengan saat training (misal 24 data terakhir)
+SEQ_LENGTH = 24  # Model butuh 24 'langkah' ke belakang
+PREDICT_HOURS = 72 # 3 Hari x 24 Jam
 
-# --- SETUP STREAMLIT ---
-st.set_page_config(
-    page_title="Weather AI System",
-    page_icon="🌦️",
-    layout="wide"
-)
-
-# Custom CSS untuk tampilan Skripsi yang rapi
-st.markdown("""
-<style>
-    .metric-card {background-color: #f0f2f6; padding: 15px; border-radius: 10px; text-align: center;}
-    .stAlert {margin-top: 20px;}
-</style>
-""", unsafe_allow_html=True)
-
-# --- FUNGSI UTAMA ---
+st.set_page_config(page_title="Weather AI 3-Day Forecast", layout="wide")
 
 @st.cache_resource
 def load_ai_system():
-    """Load Model dan Scaler sekali saja saat start"""
-    if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-        return None, None
+    if not os.path.exists(MODEL_PATH): return None, None
+    scaler = joblib.load(SCALER_PATH)
+    model = tf.keras.models.load_model(MODEL_PATH, custom_objects={'Time2Vector': Time2Vector})
+    return model, scaler
+
+def get_history_data():
+    """Ambil data 7 hari terakhir"""
+    conn = sqlite3.connect(DB_PATH)
+    # Query data seminggu terakhir
+    query = """
+        SELECT timestamp, temp, wind_speed, pressure, humidity, rain_condition 
+        FROM measurements 
+        WHERE timestamp >= datetime('now', '-7 days')
+        ORDER BY timestamp ASC
+    """
+    df = pd.read_sql_query(query, conn)
+    conn.close()
     
-    try:
-        scaler = joblib.load(SCALER_PATH)
-        # Load model dengan memberitahu Keras tentang Custom Layer kita
-        model = tf.keras.models.load_model(
-            MODEL_PATH, 
-            custom_objects={'Time2Vector': Time2Vector}
-        )
-        return model, scaler
-    except Exception as e:
-        st.error(f"Gagal memuat model: {e}")
-        return None, None
-
-def get_latest_data(limit=100):
-    """Ambil data dari SQLite"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        # Ambil data rain_condition sebagai angka (0/1)
-        query = f"""
-            SELECT timestamp, temp, wind_speed, pressure, humidity, rain_condition 
-            FROM measurements 
-            ORDER BY timestamp DESC LIMIT {limit}
-        """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-        
-        # Konversi timestamp ke datetime object
+    if not df.empty:
         df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df = df.set_index('timestamp')
         
-        # Urutkan dari terlama ke terbaru (Ascending) untuk plotting & AI
-        return df.iloc[::-1].reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame()
+        # PENTING: Resample data menjadi per JAM (Rata-rata)
+        # Agar 1 langkah prediksi AI = 1 Jam
+        df_hourly = df.resample('1H').mean().interpolate() # Interpolate isi data bolong
+        return df_hourly.dropna()
+    return pd.DataFrame()
 
-# --- LOAD RESOURCES ---
 model, scaler = load_ai_system()
 
-# --- UI LAYOUT ---
-st.title("🌦️ Skripsi: Autonomous Weather Station with LSTM-Transformer")
-st.markdown("Sistem monitoring cuaca hiperlokal dengan prediksi berbasis *Deep Learning*.")
+# --- UI ---
+st.title("🌦️ 3-Day Autonomous Weather Forecast")
 
 placeholder = st.empty()
 
 while True:
-    # 1. Fetch Data
-    df = get_latest_data(limit=SEQ_LENGTH + 20) # Ambil buffer lebih
+    df = get_history_data()
     
     with placeholder.container():
-        if df.empty:
-            st.warning("⚠️ Belum ada data di Database. Jalankan 'collector.py' dan nyalakan sensor.")
+        if len(df) < SEQ_LENGTH:
+            st.warning(f"Menunggu data terkumpul minimal {SEQ_LENGTH} jam... (Saat ini: {len(df)} jam)")
+            st.info("Sistem membutuhkan data historis 24 jam pertama untuk mulai memprediksi 3 hari ke depan.")
         else:
+            # Data terakhir (Realtime dari DB)
             latest = df.iloc[-1]
             
-            # --- SECTION 1: REALTIME MONITORING ---
-            st.subheader(f"📍 Kondisi Terkini ({latest['timestamp'].strftime('%H:%M:%S')})")
-            
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("🌡️ Temperatur", f"{latest['temp']:.1f} °C")
+            # --- MONITORING SAAT INI ---
+            st.subheader(f"Kondisi Terkini")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("🌡️ Suhu", f"{latest['temp']:.1f} °C")
             c2.metric("💧 Kelembaban", f"{latest['humidity']:.1f} %")
-            c3.metric("⏲️ Tekanan", f"{latest['pressure']:.1f} hPa")
+            c3.metric("⏲️ Tekanan", f"{latest['pressure']:.0f} hPa")
             c4.metric("💨 Angin", f"{latest['wind_speed']:.1f} m/s")
-            
-            rain_status = "Hujan" if latest['rain_condition'] > 0.5 else "Cerah"
-            c5.metric("🌧️ Kondisi", rain_status)
-            
-            st.divider()
 
-            # --- SECTION 2: AI INFERENCE ---
-            st.subheader("🔮 Prediksi Cuaca (Next Step Inference)")
-            
-            # Cek kecukupan data
-            if len(df) < SEQ_LENGTH:
-                st.info(f"Mengumpulkan data untuk prediksi AI... ({len(df)}/{SEQ_LENGTH})")
-                st.progress(len(df)/SEQ_LENGTH)
-            elif model is not None:
-                # Siapkan Input
+            # --- PREDIKSI 3 HARI (AUTOREGRESSIVE LOOP) ---
+            if model:
+                # 1. Siapkan input awal (24 jam terakhir)
                 input_df = df.tail(SEQ_LENGTH)[['temp', 'wind_speed', 'pressure', 'humidity', 'rain_condition']]
-                input_scaled = scaler.transform(input_df)
+                input_scaled = scaler.transform(input_df) # Shape (24, 5)
                 
-                # Reshape: (1, 24, 5)
-                input_tensor = input_scaled.reshape(1, SEQ_LENGTH, 5)
+                # Bentuk tensor (1, 24, 5)
+                current_batch = input_scaled.reshape(1, SEQ_LENGTH, 5)
                 
-                # Predict
-                pred_scaled = model.predict(input_tensor, verbose=0)
-                pred_actual = scaler.inverse_transform(pred_scaled)[0]
+                predictions_scaled = []
                 
-                # Tampilkan Hasil
-                col_res1, col_res2 = st.columns([1, 2])
-                
-                with col_res1:
-                    st.success(f"**Prediksi Suhu:** {pred_actual[0]:.2f} °C")
-                    st.info(f"**Prediksi Kelembaban:** {pred_actual[3]:.2f} %")
+                # 2. LOOPING 72 kali (3 Hari)
+                # Prediksi jam ke-1 -> Masukkan jadi input -> Prediksi jam ke-2 -> dst
+                for i in range(PREDICT_HOURS):
+                    # Prediksi 1 langkah
+                    pred = model.predict(current_batch, verbose=0) # Shape (1, 5)
+                    predictions_scaled.append(pred[0])
                     
-                    chance_rain = np.clip(pred_actual[4], 0, 1) * 100
-                    status_pred = "Hujan" if chance_rain > 50 else "Cerah"
-                    st.warning(f"**Potensi Hujan:** {chance_rain:.1f}% ({status_pred})")
+                    # Update batch input:
+                    # Geser window: buang data terlama (index 0), masukkan prediksi baru ke paling belakang
+                    # Reshape pred jadi (1, 1, 5) agar bisa diappend
+                    pred_reshaped = pred.reshape(1, 1, 5)
+                    current_batch = np.append(current_batch[:, 1:, :], pred_reshaped, axis=1)
+                
+                # 3. Kembalikan ke nilai asli
+                predictions_actual = scaler.inverse_transform(np.array(predictions_scaled))
+                
+                # Buat DataFrame Prediksi
+                last_time = df.index[-1]
+                future_dates = [last_time + pd.Timedelta(hours=x+1) for x in range(PREDICT_HOURS)]
+                
+                df_pred = pd.DataFrame(predictions_actual, index=future_dates, columns=input_df.columns)
+                
+                # --- VISUALISASI ---
+                st.divider()
+                st.subheader("🔮 Grafik Prediksi 3 Hari ke Depan")
+                
+                # Kita gabung History (7 hari) + Prediksi (3 hari)
+                fig = go.Figure()
+                
+                # Plot History
+                fig.add_trace(go.Scatter(x=df.index, y=df['temp'], name='History (7 Hari)', line=dict(color='gray')))
+                
+                # Plot Prediksi
+                fig.add_trace(go.Scatter(x=df_pred.index, y=df_pred['temp'], name='Prediksi (3 Hari)', line=dict(color='red', width=3)))
+                
+                fig.update_layout(title="Trend Suhu: History vs Forecast", xaxis_title="Waktu", yaxis_title="Suhu (°C)")
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Tampilkan Tabel Ringkasan Harian
+                st.subheader("Ringkasan Prakiraan Harian")
+                df_pred['Day'] = df_pred.index.date
+                daily_summary = df_pred.groupby('Day').agg({
+                    'temp': 'mean',
+                    'rain_condition': lambda x: (x > 0.5).mean() * 100 # Persentase jam hujan dalam sehari
+                }).rename(columns={'temp': 'Rata-rata Suhu', 'rain_condition': 'Peluang Hujan (%)'})
+                
+                st.table(daily_summary)
 
-                with col_res2:
-                    # Gabungkan data history terakhir + prediksi untuk grafik
-                    # Buat index waktu baru untuk prediksi
-                    last_time = df['timestamp'].iloc[-1]
-                    next_time = last_time + pd.Timedelta(hours=1) # Asumsi interval 1 jam
-                    
-                    chart_data = pd.DataFrame({
-                        'Waktu': [last_time, next_time],
-                        'Suhu': [latest['temp'], pred_actual[0]],
-                        'Tipe': ['Aktual', 'Prediksi']
-                    })
-                    st.caption("Perbandingan Aktual vs Prediksi")
-                    st.dataframe(chart_data) # Bisa diganti st.line_chart jika history panjang
-
-            # --- SECTION 3: GRAFIK HISTORIS ---
-            st.subheader("📈 Tren Data Historis")
-            st.line_chart(df.set_index('timestamp')[['temp', 'humidity', 'pressure']])
-
-    # Auto Refresh rate
-    time.sleep(5)
+    time.sleep(10) # Refresh tiap 10 detik (karena data diresample per jam, tidak perlu terlalu cepat)
