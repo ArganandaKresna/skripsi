@@ -55,7 +55,7 @@ Digunakan untuk melatih model dengan data historis.
 
 ```bash
 # Clone atau Download repository ini
-cd skripsi_weather_system
+cd weather_system
 
 # Buat Virtual Environment
 python -m venv venv
@@ -140,7 +140,7 @@ source ../venv/bin/activate
 `python dummy_sensor.py`
 Tanda Berhasil: Dashboard akan mulai bergerak dan grafik terupdate setiap 5 detik.
 
-#### 🛑 Cara Mematikan Sistem
+### 🛑 Cara Mematikan Sistem
 Karena sistem berjalan di terminal (foreground), cara mematikannya adalah:
 
 Matikan Dashboard & Sensor: Klik pada terminal yang sedang berjalan, lalu tekan tombol keyboard: `CTRL + C`

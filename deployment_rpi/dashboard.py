@@ -27,7 +27,7 @@ PREDICT_HOURS = 72
 
 # --- SETUP PAGE ---
 st.set_page_config(
-    page_title="SkyNet Weather AI",
+    page_title="SkyNet BotRobot",
     page_icon="⛈️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -116,16 +116,14 @@ model, scaler = load_ai_system()
 with st.sidebar:
     st.header("⚙️ System Status")
     if model:
-        st.success("✅ AI Model Loaded")
+        st.success("✅ LSTM Model Loaded")
     else:
-        st.error("❌ AI Model Missing")
+        st.error("❌ LSTM Model Missing")
     
     st.info(f"📁 Database: {DB_PATH}")
     st.markdown("---")
     st.write("**Architecture:**")
     st.caption("Hybrid LSTM + Transformer")
-    st.caption("Sequence Length: 24 Hours")
-    st.caption(f"Forecast Horizon: {PREDICT_HOURS} Hours")
     st.markdown("---")
     st.write("© 2025 Skripsi IoT")
 
@@ -168,7 +166,7 @@ while True:
             st.divider()
 
             # --- TABS NAVIGASI ---
-            tab1, tab2, tab3 = st.tabs(["🔮 AI Forecast", "📊 Analisis Detail", "📥 Raw Data"])
+            tab1, tab2, tab3 = st.tabs(["🔮 Forecast", "📊 Analisis Detail", "📥 Raw Data"])
 
             # === TAB 1: AI FORECAST ===
             with tab1:
@@ -207,7 +205,7 @@ while True:
                         
                         # Data Prediksi
                         fig_forecast.add_trace(go.Scatter(x=df_pred.index, y=df_pred['temp'], 
-                                                        mode='lines', name='AI Prediction',
+                                                        mode='lines', name='Prediction',
                                                         line=dict(color='#FF4B4B', width=4))) # Merah Streamlit
                         
                         # Garis Vertikal "NOW"
