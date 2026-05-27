@@ -1,6 +1,8 @@
 venv
 __pycache__
+api
+
 data_kolektor/.env
 data_kolektor/weather_data.db
 data_kolektor/log_kolektor.txt
-api
+data_kolektor/nama_pid.txt
