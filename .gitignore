@@ -1,0 +1,5 @@
+venv
+__pycache__
+data_kolektor/.env
+data_kolektor/weather_data.db
+data_kolektor/log_kolektor.txt

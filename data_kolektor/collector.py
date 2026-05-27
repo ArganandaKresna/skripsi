@@ -3,8 +3,11 @@ import time
 import sqlite3
 import requests
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-API_KEY = "5d46368f1024970f93a035dab5c95de2"
+load_dotenv()
+
+API_KEY = os.getenv("APIKEY")
 LAT = -7.266609668436994
 LON = 112.78618232416069
 URL = f"http://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric"
