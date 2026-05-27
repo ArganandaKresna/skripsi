@@ -1,0 +1,6 @@
+tensorflow
+numpy
+paho-mqtt
+pandas
+psutil
+streamlit
